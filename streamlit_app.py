@@ -11,23 +11,12 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 
-# Try to import plotly_events for click handling
-try:
-    from streamlit_plotly_events import plotly_events
-    CLICK_ENABLED = True
-except ImportError:
-    CLICK_ENABLED = False
-
 # Page config
 st.set_page_config(
     page_title="Golf Market Opportunity Explorer",
     page_icon="⛳",
     layout="wide"
 )
-
-# Initialize session state for selected state
-if 'selected_state' not in st.session_state:
-    st.session_state.selected_state = 'National (All States)'
 
 # State abbreviation mapping
 STATE_ABBREV = {
@@ -44,23 +33,18 @@ STATE_ABBREV = {
     'District of Columbia': 'DC'
 }
 
+ABBREV_TO_STATE = {v: k for k, v in STATE_ABBREV.items()}
+
 # Load and prepare data
 @st.cache_data
 def load_data():
     df = pd.read_csv('census.csv')
-    
-    # Clean state names (strip whitespace)
     df['state'] = df['state'].str.strip()
-    
-    # Create calculated columns
     df['diversity'] = 100 - df['pct_white']
     df['affluent'] = df['median_income'] >= df['median_income'].quantile(0.75)
     df['growth_demo_proxy'] = ((50 - df['median_age']).clip(0, 20) / 20 * 50 + 
                                (100 - df['pct_over_65']) / 100 * 50).round(1)
-    
-    # Add state abbreviations
     df['state_abbrev'] = df['state'].map(STATE_ABBREV)
-    
     return df
 
 # Calculate opportunity score
@@ -70,7 +54,6 @@ def calc_opp_score(df, w_inc, w_edu, w_div, w_pop, w_age):
     div = (df['diversity'] / df['diversity'].max()).clip(0, 1)
     pop = (np.log1p(df['population']) / np.log1p(df['population'].max())).clip(0, 1)
     age = ((50 - df['median_age']).clip(0, 20) / 20)
-    
     total = w_inc + w_edu + w_div + w_pop + w_age
     return ((inc * w_inc + edu * w_edu + div * w_div + pop * w_pop + age * w_age) / total * 100).round(1)
 
@@ -136,32 +119,15 @@ c4.metric('Avg Score', f'{filtered["opportunity_score"].mean():.1f}')
 st.markdown('---')
 
 # ============================================================================
-# MAP SECTION
+# MAP SECTION WITH TABS
 # ============================================================================
 
 st.subheader('🗺️ Market Opportunity Map')
 
-# State selector (also updated by clicks)
-col1, col2 = st.columns([3, 1])
+# Use tabs for National vs State view
+tab1, tab2 = st.tabs(['🇺🇸 National View', '🔍 State Drill-Down'])
 
-with col1:
-    selected_state = st.selectbox(
-        'View',
-        options=['National (All States)'] + sorted(df['state'].unique().tolist()),
-        index=0 if st.session_state.selected_state == 'National (All States)' 
-              else sorted(df['state'].unique().tolist()).index(st.session_state.selected_state) + 1
-              if st.session_state.selected_state in df['state'].unique() else 0,
-        key='state_selector'
-    )
-    st.session_state.selected_state = selected_state
-
-with col2:
-    if selected_state != 'National (All States)':
-        if st.button('← Back to National'):
-            st.session_state.selected_state = 'National (All States)'
-            st.rerun()
-
-if selected_state == 'National (All States)':
+with tab1:
     # Aggregate to state level
     state_data = filtered.groupby(['state', 'state_abbrev']).agg({
         'opportunity_score': 'mean',
@@ -190,30 +156,51 @@ if selected_state == 'National (All States)':
         margin=dict(l=0, r=0, t=0, b=0),
         height=500
     )
+    st.plotly_chart(fig, use_container_width=True)
     
-    # Try click events, fall back to regular chart
-    if CLICK_ENABLED:
-        st.caption('👆 **Click any state to drill down** or use the dropdown above')
-        clicked = plotly_events(fig, click_event=True, override_height=500)
-        
-        if clicked and len(clicked) > 0:
-            # Get the clicked state
-            click_idx = clicked[0].get('pointIndex', None)
-            if click_idx is not None and click_idx < len(state_data):
-                clicked_state = state_data.iloc[click_idx]['state']
-                st.session_state.selected_state = clicked_state
-                st.rerun()
-    else:
-        st.plotly_chart(fig, use_container_width=True)
-        st.info('👆 Select a state from the dropdown to drill down. *Tip: Install `streamlit-plotly-events` for click-to-drill-down.*')
+    # Top states table
+    st.markdown('#### Top 10 States by Opportunity Score')
+    top_states = state_data.nlargest(10, 'avg_score')[['state', 'avg_score', 'high_opp', 'n_counties', 'med_inc']]
+    top_states.columns = ['State', 'Avg Score', 'High Opp Counties', 'Total Counties', 'Median Income']
+    top_states = top_states.reset_index(drop=True)
+    top_states.index = top_states.index + 1
+    st.dataframe(
+        top_states.style.format({
+            'Avg Score': '{:.1f}',
+            'Median Income': '${:,.0f}'
+        }),
+        use_container_width=True
+    )
 
-else:
-    # State drill-down: show counties as horizontal bar chart
-    state_df = filtered[filtered['state'] == selected_state].sort_values('opportunity_score', ascending=True)
+with tab2:
+    # State selector with quick-select buttons for top states
+    st.markdown('**Quick Select (Top 5 States):**')
     
-    if len(state_df) == 0:
-        st.warning(f'No data for {selected_state}')
-    else:
+    top_5_states = state_data.nlargest(5, 'avg_score')['state'].tolist()
+    
+    cols = st.columns(5)
+    selected_state = None
+    
+    for i, state in enumerate(top_5_states):
+        if cols[i].button(state, use_container_width=True):
+            selected_state = state
+    
+    st.markdown('**Or choose from all states:**')
+    dropdown_state = st.selectbox(
+        'Select State',
+        options=[''] + sorted(df['state'].unique().tolist()),
+        format_func=lambda x: 'Choose a state...' if x == '' else x
+    )
+    
+    # Use button selection if clicked, otherwise dropdown
+    if selected_state is None and dropdown_state:
+        selected_state = dropdown_state
+    
+    if selected_state:
+        state_df = filtered[filtered['state'] == selected_state].sort_values('opportunity_score', ascending=True)
+        
+        st.markdown(f'### {selected_state}')
+        
         # State metrics
         c1, c2, c3, c4 = st.columns(4)
         c1.metric('Counties', len(state_df))
@@ -221,7 +208,7 @@ else:
         c3.metric('Avg Score', f"{state_df['opportunity_score'].mean():.1f}")
         c4.metric('Total Pop', f"{state_df['population'].sum():,.0f}")
         
-        # Bar chart
+        # Bar chart of counties
         fig = px.bar(
             state_df,
             x='opportunity_score',
@@ -239,6 +226,25 @@ else:
             yaxis={'categoryorder': 'total ascending'}
         )
         st.plotly_chart(fig, use_container_width=True)
+        
+        # Top counties table
+        st.markdown(f'#### Top 10 Counties in {selected_state}')
+        top_counties = state_df.nlargest(10, 'opportunity_score')[
+            ['county', 'opportunity_score', 'median_income', 'pct_college', 'diversity', 'population']
+        ].reset_index(drop=True)
+        top_counties.index = top_counties.index + 1
+        st.dataframe(
+            top_counties.style.format({
+                'opportunity_score': '{:.1f}',
+                'median_income': '${:,.0f}',
+                'pct_college': '{:.1f}%',
+                'diversity': '{:.1f}%',
+                'population': '{:,.0f}'
+            }),
+            use_container_width=True
+        )
+    else:
+        st.info('👆 Select a state using the buttons above or the dropdown')
 
 st.markdown('---')
 
@@ -260,7 +266,7 @@ with col1:
     
     # Scatter with threshold lines
     fig = px.scatter(
-        filtered.sample(min(500, len(filtered))),  # Sample for performance
+        filtered.sample(min(500, len(filtered)), random_state=42),
         x='median_income', y='growth_demo_proxy',
         color='high_opportunity',
         color_discrete_map={True: 'forestgreen', False: 'lightgray'},
@@ -273,7 +279,6 @@ with col1:
     st.plotly_chart(fig, use_container_width=True)
 
 with col2:
-    # High opportunity by region
     by_region = filtered[filtered['high_opportunity']].groupby('region').size().reset_index(name='count')
     by_region = by_region.sort_values('count')
     
