@@ -1,6 +1,6 @@
 """
 Golf Market Opportunity Explorer
-Streamlit App for Golf Marketing Analysis
+Streamlit App for Acushnet/Titleist Marketing Analysis
 
 Author: Cook Welch
 Boston College MBA
@@ -67,20 +67,6 @@ df = load_data()
 st.sidebar.header('⛳ Golf Market Explorer')
 
 st.sidebar.markdown('---')
-st.sidebar.subheader('📊 Target Market Thresholds')
-
-income_threshold = st.sidebar.slider(
-    'Min Household Income',
-    min_value=30000, max_value=150000, value=75000, step=5000, format='$%d'
-)
-
-growth_demo_min = st.sidebar.slider(
-    'Min Growth Demo Score',
-    min_value=0, max_value=100, value=50,
-    help='Higher = younger population'
-)
-
-st.sidebar.markdown('---')
 st.sidebar.subheader('🌎 Region Filter')
 
 all_regions = sorted(df['region'].dropna().unique().tolist())
@@ -97,7 +83,7 @@ w_age = st.sidebar.slider('Youth', 0, 100, 10)
 
 # Apply calculations
 df['opportunity_score'] = calc_opp_score(df, w_inc, w_edu, w_div, w_pop, w_age)
-df['high_opportunity'] = (df['median_income'] >= income_threshold) & (df['growth_demo_proxy'] >= growth_demo_min)
+df['high_opportunity'] = df['opportunity_score'] >= 50  # Simple threshold based on score
 
 # Filter by region
 filtered = df[df['region'].isin(selected_regions)].copy() if selected_regions else df.copy()
@@ -252,29 +238,27 @@ st.markdown('---')
 # SCENARIO ANALYSIS
 # ============================================================================
 
-st.subheader('🎯 Scenario Analysis')
+st.subheader('🎯 Market Analysis')
 
 col1, col2 = st.columns(2)
 
 with col1:
     st.markdown(f"""
-    **Your Thresholds:**  
-    Income ≥ **${income_threshold:,}** | Growth Demo ≥ **{growth_demo_min}**
+    **High Opportunity:** Counties with score ≥ 50
     
-    **Result:** {filtered['high_opportunity'].sum():,} counties qualify
+    **Result:** {filtered['high_opportunity'].sum():,} counties qualify ({filtered['high_opportunity'].mean()*100:.1f}%)
     """)
     
-    # Scatter with threshold lines
-    fig = px.scatter(
-        filtered.sample(min(500, len(filtered)), random_state=42),
-        x='median_income', y='growth_demo_proxy',
+    # Score distribution histogram
+    fig = px.histogram(
+        filtered,
+        x='opportunity_score',
         color='high_opportunity',
         color_discrete_map={True: 'forestgreen', False: 'lightgray'},
-        hover_name='county',
-        labels={'median_income': 'Median Income', 'growth_demo_proxy': 'Growth Demo Score'}
+        nbins=30,
+        labels={'opportunity_score': 'Opportunity Score', 'high_opportunity': 'High Opportunity'}
     )
-    fig.add_vline(x=income_threshold, line_dash='dash', line_color='red')
-    fig.add_hline(y=growth_demo_min, line_dash='dash', line_color='red')
+    fig.add_vline(x=50, line_dash='dash', line_color='red', annotation_text='Threshold: 50')
     fig.update_layout(height=350, showlegend=False)
     st.plotly_chart(fig, use_container_width=True)
 
