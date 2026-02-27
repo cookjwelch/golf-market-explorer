@@ -11,12 +11,23 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 
+# Try to import plotly_events for click handling
+try:
+    from streamlit_plotly_events import plotly_events
+    CLICK_ENABLED = True
+except ImportError:
+    CLICK_ENABLED = False
+
 # Page config
 st.set_page_config(
     page_title="Golf Market Opportunity Explorer",
     page_icon="⛳",
     layout="wide"
 )
+
+# Initialize session state for selected state
+if 'selected_state' not in st.session_state:
+    st.session_state.selected_state = 'National (All States)'
 
 # State abbreviation mapping
 STATE_ABBREV = {
@@ -130,11 +141,25 @@ st.markdown('---')
 
 st.subheader('🗺️ Market Opportunity Map')
 
-# State selector
-selected_state = st.selectbox(
-    'View',
-    options=['National (All States)'] + sorted(df['state'].unique().tolist())
-)
+# State selector (also updated by clicks)
+col1, col2 = st.columns([3, 1])
+
+with col1:
+    selected_state = st.selectbox(
+        'View',
+        options=['National (All States)'] + sorted(df['state'].unique().tolist()),
+        index=0 if st.session_state.selected_state == 'National (All States)' 
+              else sorted(df['state'].unique().tolist()).index(st.session_state.selected_state) + 1
+              if st.session_state.selected_state in df['state'].unique() else 0,
+        key='state_selector'
+    )
+    st.session_state.selected_state = selected_state
+
+with col2:
+    if selected_state != 'National (All States)':
+        if st.button('← Back to National'):
+            st.session_state.selected_state = 'National (All States)'
+            st.rerun()
 
 if selected_state == 'National (All States)':
     # Aggregate to state level
@@ -165,9 +190,22 @@ if selected_state == 'National (All States)':
         margin=dict(l=0, r=0, t=0, b=0),
         height=500
     )
-    st.plotly_chart(fig, use_container_width=True)
     
-    st.info('👆 Select a state from the dropdown to drill down to county level')
+    # Try click events, fall back to regular chart
+    if CLICK_ENABLED:
+        st.caption('👆 **Click any state to drill down** or use the dropdown above')
+        clicked = plotly_events(fig, click_event=True, override_height=500)
+        
+        if clicked and len(clicked) > 0:
+            # Get the clicked state
+            click_idx = clicked[0].get('pointIndex', None)
+            if click_idx is not None and click_idx < len(state_data):
+                clicked_state = state_data.iloc[click_idx]['state']
+                st.session_state.selected_state = clicked_state
+                st.rerun()
+    else:
+        st.plotly_chart(fig, use_container_width=True)
+        st.info('👆 Select a state from the dropdown to drill down. *Tip: Install `streamlit-plotly-events` for click-to-drill-down.*')
 
 else:
     # State drill-down: show counties as horizontal bar chart
