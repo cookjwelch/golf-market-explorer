@@ -1,6 +1,6 @@
 """
 Golf Market Opportunity Explorer
-Streamlit App for Acushnet/Titleist Marketing Analysis
+Streamlit App for Golf Marketing Analysis
 
 Author: Cook Welch
 Boston College MBA
