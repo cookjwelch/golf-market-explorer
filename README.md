@@ -1,10 +1,10 @@
 # Golf Market Opportunity Explorer ⛳
 
-An interactive Streamlit app to identify high-potential U.S. counties for golf equipment marketing (Titleist, FootJoy).
+An interactive Streamlit app to identify high-potential U.S. counties for golf equipment marketing.
 
 ## Live Demo
 
-[View the app on Streamlit Cloud](https://your-app-url.streamlit.app) *(update this link after deployment)*
+[View the app on Streamlit Cloud](https://golf-market-explorer.streamlit.app/)
 
 ## Overview
 
@@ -47,13 +47,6 @@ streamlit run streamlit_app.py
 | `requirements.txt` | Python dependencies |
 | `CodingProject_FinalDraft.html` | Full analysis notebook |
 
-## Methodology
-
-The opportunity score methodology is based on National Golf Foundation research on golfer demographics:
-
-> "The number of Asian, Black, and Hispanic golfers has risen by 43% from 2018-2023. In that time, the age of the average golfer has also dropped from 44.6 to 43.5."
-> 
-> — [NGF Golf Participation Update, February 2024](https://www.ngf.org/short-game/golf-participation-update-bigger-younger-and-cooler/)
 
 ## Author
 
