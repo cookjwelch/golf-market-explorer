@@ -93,7 +93,7 @@ filtered = df[df['region'].isin(selected_regions)].copy() if selected_regions el
 # ============================================================================
 
 st.title('⛳ Golf Market Opportunity Explorer')
-st.markdown('*Identify high-potential counties for Titleist and FootJoy marketing*')
+st.markdown('*Identify high-potential counties for golf club and apparel marketing*')
 
 # Metrics row
 c1, c2, c3, c4 = st.columns(4)
